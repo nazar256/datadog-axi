@@ -66,6 +66,16 @@ Download release assets from the GitHub Releases page:
 
 - <https://github.com/nazar256/datadog-cli/releases>
 
+## Maintainer release checklist
+
+Before pushing a public release tag:
+
+1. Confirm the working tree has no local secrets or generated artifacts: `git status --short --ignored`.
+2. Run the basic quality gate: `go test ./...` and `go build ./cmd/ddog`.
+3. Update release notes or the GitHub generated notes so users know what changed.
+4. Push an intentional `vX.Y.Z` tag and let the Release workflow create a draft release.
+5. Before publishing the draft, verify the archives, checksum file, and `install.sh` asset are attached.
+
 ## Shell completion
 
 Generate completions from the installed binary:
@@ -74,4 +84,5 @@ Generate completions from the installed binary:
 ddog completion bash
 ddog completion zsh
 ddog completion fish
+ddog completion powershell
 ```

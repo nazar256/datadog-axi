@@ -47,7 +47,7 @@ type fakeMetricService struct{}
 func (fakeMetricService) Query(context.Context, runtime.Config, metric.QueryParams) (metric.QueryResult, error) {
 	v := 1.5
 	lastPoint := time.Date(2026, 3, 21, 10, 0, 0, 0, time.UTC)
-	return metric.QueryResult{Query: "avg:test{*}", Count: 1, Series: []metric.Series{{Metric: "test.metric", Scope: "*", Aggregator: "avg", LastValue: &v, LastPointTS: &lastPoint}}}, nil
+	return metric.QueryResult{Query: "avg:test{*}", Count: 1, Series: []metric.Series{{Metric: "test.metric", Scope: "*", Aggregator: "avg", PointCount: 7, LastValue: &v, LastPointTS: &lastPoint}}}, nil
 }
 
 type fakeLogsService struct{}
@@ -94,6 +94,27 @@ func TestMetricQueryAllowsAbsoluteRange(t *testing.T) {
 	if !strings.Contains(buf.String(), "test.metric") {
 		t.Fatalf("unexpected output: %s", buf.String())
 	}
+	if !strings.Contains(buf.String(), "POINTS") || !strings.Contains(buf.String(), "7") {
+		t.Fatalf("expected metric text output to include point summary, got: %s", buf.String())
+	}
+}
+
+func TestMetricQueryHelpGuidesJSONParsing(t *testing.T) {
+	cmd := newRootCmdWithOptions(&GlobalOptions{FlagValues: runtime.FlagValues{NoEnvFile: true}})
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"metric", "query", "--help"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+	for _, snippet := range []string{"--output json", "point_count", "last_point_ts", "last_value"} {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected metric help to contain %q, got:\n%s", snippet, output)
+		}
+	}
 }
 
 func TestLogSearchText(t *testing.T) {
@@ -119,6 +140,24 @@ func TestLogSearchRejectsInvalidSort(t *testing.T) {
 	err := cmd.Execute()
 	if err == nil || !strings.Contains(err.Error(), "--sort must be 'asc' or 'desc'") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLogSearchHelpGuidesExploration(t *testing.T) {
+	cmd := newRootCmdWithOptions(&GlobalOptions{FlagValues: runtime.FlagValues{NoEnvFile: true}})
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"log", "search", "--help"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := buf.String()
+	for _, snippet := range []string{"focused query", "--last", "--index", "--output json", "@http.status_code:[500 TO 599]"} {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected log help to contain %q, got:\n%s", snippet, output)
+		}
 	}
 }
 

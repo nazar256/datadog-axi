@@ -351,8 +351,11 @@ func newMetricQueryCmd(opts *GlobalOptions) *cobra.Command {
 	var query string
 	var last, from, to string
 	cmd := &cobra.Command{
-		Use:     "query",
-		Short:   "Query metric timeseries",
+		Use:   "query",
+		Short: "Query metric timeseries",
+		Long: strings.TrimSpace(`Query Datadog metric timeseries for a relative or absolute time window.
+
+Prefer '--output json' when an agent or script will parse the result. JSON returns a top-level 'series' array with summary fields instead of raw pointlists: 'point_count' is the number of non-empty points returned, 'last_point_ts' is the timestamp of the last non-empty point, and 'last_value' is that point's numeric value.`),
 		Args:    cobra.NoArgs,
 		Example: "ddog metric query --query 'avg:system.load.1{*}' --last 1h\n  ddog metric query --query 'avg:system.cpu.user{env:prod}' --from 2026-03-21T09:00:00Z --to 2026-03-21T10:00:00Z --output json",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -378,9 +381,9 @@ func newMetricQueryCmd(opts *GlobalOptions) *cobra.Command {
 					if item.LastValue != nil {
 						lastValue = strconv.FormatFloat(*item.LastValue, 'f', -1, 64)
 					}
-					rows = append(rows, []string{truncateForTable(firstNonEmpty(item.Metric, item.Expression), 36), truncateForTable(item.Scope, 24), item.Aggregator, lastValue, formatOptionalTime(item.LastPointTS)})
+					rows = append(rows, []string{truncateForTable(firstNonEmpty(item.Metric, item.Expression), 36), truncateForTable(item.Scope, 24), item.Aggregator, formatCount(item.PointCount), lastValue, formatOptionalTime(item.LastPointTS)})
 				}
-				if err := output.Table(w, []string{"SERIES", "SCOPE", "AGGR", "LAST", "LAST POINT"}, rows); err != nil {
+				if err := output.Table(w, []string{"SERIES", "SCOPE", "AGGR", "POINTS", "LAST", "LAST POINT"}, rows); err != nil {
 					return err
 				}
 				_, err := fmt.Fprintf(w, "\nReturned %s series for range %s to %s\n", formatCount(result.Count), formatTime(result.From), formatTime(result.To))
@@ -388,7 +391,7 @@ func newMetricQueryCmd(opts *GlobalOptions) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&query, "query", "", "Datadog metric query")
+	cmd.Flags().StringVar(&query, "query", "", "Datadog metric query, for example 'avg:system.cpu.user{env:prod}'")
 	cmd.Flags().StringVar(&last, "last", "", "Relative lookback duration, such as 15m or 1h")
 	cmd.Flags().StringVar(&from, "from", "", "Range start in RFC3339")
 	cmd.Flags().StringVar(&to, "to", "", "Range end in RFC3339 or 'now'")
@@ -408,10 +411,13 @@ func newLogSearchCmd(opts *GlobalOptions) *cobra.Command {
 	var indexes []string
 	var sort string
 	cmd := &cobra.Command{
-		Use:     "search",
-		Short:   "Search logs",
+		Use:   "search",
+		Short: "Search logs",
+		Long: strings.TrimSpace(`Search Datadog logs with a Datadog log query and a narrow time window.
+
+Start with a focused query such as 'service:web status:error' or 'env:prod @http.status_code:[500 TO 599]'. Use '--last' for quick exploration, add '--index' to target specific log indexes, and prefer '--output json' when an agent or script needs stable fields like 'items', 'count', and per-entry 'message', 'service', 'status', 'host', and 'timestamp'.`),
 		Args:    cobra.NoArgs,
-		Example: "ddog log search --query 'service:web status:error' --last 15m\n  ddog log search --query 'env:prod' --index main --limit 20 --output json",
+		Example: "ddog log search --query 'service:web status:error' --last 15m\n  ddog log search --query 'env:prod @http.status_code:[500 TO 599]' --last 30m --index main --limit 20 --output json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(query) == "" {
 				return fmt.Errorf("--query is required")
@@ -447,7 +453,7 @@ func newLogSearchCmd(opts *GlobalOptions) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&query, "query", "", "Datadog log query")
+	cmd.Flags().StringVar(&query, "query", "", "Datadog log query, for example 'service:web status:error'")
 	cmd.Flags().StringVar(&last, "last", "", "Relative lookback duration, such as 15m or 1h")
 	cmd.Flags().StringVar(&from, "from", "", "Range start in RFC3339")
 	cmd.Flags().StringVar(&to, "to", "", "Range end in RFC3339 or 'now'")

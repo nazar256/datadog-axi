@@ -23,7 +23,7 @@ If you are changing docs or examples, make sure they match real CLI behavior.
 
 - Use `DATADOG_API_KEY` and `DATADOG_APP_KEY` from your environment or a local `.env` file.
 - Never commit real Datadog credentials.
-- Prefer `ddog config doctor` when checking auth-related behavior.
+- Prefer `ddog doctor` when checking auth-related behavior; `ddog config doctor` remains available when you want the explicit subcommand path.
 
 ## Pull requests
 

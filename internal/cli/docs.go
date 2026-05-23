@@ -20,7 +20,9 @@ command taxonomy. This is intended to be self-discoverable for both humans and A
 			return renderDocs(cmd.OutOrStdout(), opts, "summary")
 		},
 		Example: strings.TrimSpace(`ddog docs summary
+
 ddog docs auth
+
 ddog docs commands --output json`),
 	}
 	cmd.AddCommand(newDocsTopicCmd(opts, "summary", docsSummary))
@@ -47,7 +49,7 @@ var docsSummary = docTopic{
 		"Offline-safe commands work without credentials.",
 		"Live Datadog commands read DATADOG_API_KEY and DATADOG_APP_KEY from env or .env.",
 	},
-	Examples:    []string{"ddog config doctor", "ddog docs commands", "ddog monitor list --help"},
+	Examples:    []string{"ddog doctor", "ddog docs commands", "ddog monitor list --help"},
 	RelatedDocs: []string{"auth", "commands", "output", "sites"},
 }
 
@@ -61,7 +63,7 @@ var docsAuth = docTopic{
 		"Process environment variables override .env values.",
 	},
 	Examples: []string{
-		"DATADOG_API_KEY=*** DATADOG_APP_KEY=*** ddog config doctor --no-env-file",
+		"DATADOG_API_KEY=*** DATADOG_APP_KEY=*** ddog doctor --no-env-file",
 		"ddog --env-file .env config doctor",
 	},
 	RelatedDocs: []string{"sites", "output"},
@@ -75,7 +77,7 @@ var docsSites = docTopic{
 		"Aliases are normalized to full hostnames such as datadoghq.com or datadoghq.eu.",
 		"Only supported Datadog site hostnames are accepted directly.",
 	},
-	Examples:    []string{"ddog --site eu config doctor", "DATADOG_SITE=us3 ddog config doctor"},
+	Examples:    []string{"ddog --site eu doctor", "DATADOG_SITE=us3 ddog config doctor"},
 	RelatedDocs: []string{"auth"},
 }
 
@@ -85,9 +87,11 @@ var docsOutput = docTopic{
 	KeyPoints: []string{
 		"Text output is optimized for terminal reading.",
 		"JSON output is optimized for agents and scripts.",
+		"Metric JSON returns per-series summaries such as point_count, last_point_ts, and last_value instead of raw pointlists.",
+		"Log search JSON returns top-level items and count for stable parsing.",
 		"Errors are returned on stderr by Cobra command execution.",
 	},
-	Examples:    []string{"ddog config doctor --output json", "ddog docs commands --output json"},
+	Examples:    []string{"ddog doctor --output json", "ddog metric query --query 'avg:system.load.1{*}' --last 1h --output json", "ddog log search --query 'service:web status:error' --last 15m --output json"},
 	RelatedDocs: []string{"commands"},
 }
 
@@ -95,11 +99,13 @@ var docsCommands = docTopic{
 	Name:    "commands",
 	Summary: "The CLI uses top-level Datadog domains and predictable verbs so it scales cleanly.",
 	KeyPoints: []string{
-		"Offline utility commands: version, docs, config doctor.",
+		"Offline utility commands: version, docs, doctor, config doctor, completion.",
 		"Live v1 commands are organized by domain: monitor, dashboard, host, metric, log.",
 		"Typical verbs are list, get, query, and search.",
+		"Prefer 'ddog doctor' for quick config checks; 'ddog config doctor' remains available for explicit discovery.",
 	},
 	Examples: []string{
+		"ddog completion --help",
 		"ddog monitor list --help",
 		"ddog dashboard get abc-def-ghi --help",
 		"ddog metric query --help",

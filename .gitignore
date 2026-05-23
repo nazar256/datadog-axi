@@ -1,4 +1,11 @@
 .env
+.env.*
+!.env.example
 .tmp/
 dist/
 /ddog
+*.test
+*.prof
+coverage.out
+*.coverprofile
+.DS_Store

@@ -32,11 +32,14 @@ func newRootCmdWithOptions(opts *GlobalOptions) *cobra.Command {
 		Long: strings.TrimSpace(`ddog is a Datadog CLI for humans, coding agents, and automation.
 
 Use 'ddog <command> --help' to explore the command tree. Offline-safe commands such as
-'version', 'docs', and 'config doctor' work without Datadog credentials. Live Datadog
+'version', 'docs', 'doctor', 'config doctor', and 'completion' work without Datadog credentials. Live Datadog
 commands use DATADOG_API_KEY and DATADOG_APP_KEY from the environment or a local .env file.`),
-		Example: strings.TrimSpace(`ddog config doctor
-ddog docs summary
-ddog docs auth --output json
+		Example: strings.TrimSpace(`ddog doctor
+
+ddog docs commands --output json
+
+ddog completion --help
+
 ddog version`),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -60,8 +63,11 @@ ddog version`),
 
 	cmd.AddCommand(newVersionCmd(opts))
 	cmd.AddCommand(newDocsCmd(opts))
+	cmd.AddCommand(newDoctorCmd(opts))
 	cmd.AddCommand(newConfigCmd(opts))
 	addCoreCommands(cmd, opts)
+	cmd.SetCompletionCommandGroupID("utility")
+	cmd.InitDefaultCompletionCmd()
 	cmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		return fmt.Errorf("%w\n\nSee '%s --help' for usage.", err, cmd.CommandPath())
 	})

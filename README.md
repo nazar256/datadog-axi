@@ -53,10 +53,10 @@ More install details: [docs/install.md](docs/install.md)
 You can also point to a local env file with `--env-file`. By default, `ddog` reads `.env` from the current working directory only.
 
 ```bash
-export DATADOG_API_KEY=...
-export DATADOG_APP_KEY=...
+export DATADOG_API_KEY=YOUR_DATADOG_API_KEY
+export DATADOG_APP_KEY=YOUR_DATADOG_APP_KEY
 export DATADOG_SITE=datadoghq.com
-ddog config doctor
+ddog doctor
 ```
 
 Secrets are never accepted as CLI flags.
@@ -69,15 +69,16 @@ Start with built-in help and docs:
 ddog --help
 ddog docs summary
 ddog docs commands --output json
-ddog monitor --help
+ddog doctor --help
 ddog log search --help
+ddog completion --help
 ```
 
 ## Real examples
 
 ```bash
 # verify auth, site, and output mode
-ddog config doctor --output json
+ddog doctor --output json
 
 # inspect monitor coverage for a service
 ddog monitor list --name api --limit 20 --output json
@@ -85,10 +86,10 @@ ddog monitor list --name api --limit 20 --output json
 # fetch dashboards in concise terminal output
 ddog dashboard list --count 20
 
-# query a recent metric window
-ddog metric query --query 'avg:system.load.1{*}' --last 1h
+# query a recent metric window; use JSON when parsing
+ddog metric query --query 'avg:system.load.1{*}' --last 1h --output json
 
-# search recent logs for an incident query
+# search recent logs for a narrow incident query
 ddog log search --query 'service:web status:error' --last 15m --limit 20 --output json
 ```
 
@@ -99,16 +100,19 @@ ddog log search --query 'service:web status:error' --last 15m --limit 20 --outpu
 Recommended agent flow:
 
 1. Run `ddog --help` for the command tree, and `ddog docs commands --output json` for high-level command taxonomy guidance.
-2. Run `ddog config doctor --output json` before live Datadog calls.
+2. Run `ddog doctor --output json` before live Datadog calls. `ddog config doctor` remains available and resolves to the same configuration check.
 3. Prefer `--output json` whenever the result will be parsed.
 4. Keep queries narrow and explicit, especially for logs and metrics.
+5. For `metric query`, parse the JSON `series` summaries such as `point_count`, `last_point_ts`, and `last_value` instead of assuming raw pointlists or text tables.
+6. For `log search`, start with a focused Datadog query and a short `--last` window, then widen only if needed.
 
 Examples:
 
 ```bash
 ddog version --output json
-ddog config doctor --output json
+ddog doctor --output json
 ddog monitor list --limit 10 --output json
+ddog metric query --query 'avg:system.cpu.user{env:prod}' --last 1h --output json
 ddog log search --query 'service:web status:error' --last 15m --limit 20 --output json
 ```
 
@@ -124,12 +128,16 @@ Useful JSON entry points:
 ```bash
 ddog version --output json
 ddog docs commands --output json
+ddog doctor --output json
 ddog monitor list --output json
+ddog metric query --query 'avg:system.load.1{*}' --last 1h --output json
 ```
 
 ## Supported v1 command areas
 
+- `doctor`
 - `config doctor`
+- `completion`
 - `docs`
 - `version`
 - `monitor list|get`
@@ -152,6 +160,13 @@ Linux is the main release target today.
 Download binaries and checksums from:
 
 - <https://github.com/nazar256/datadog-cli/releases>
+
+## Troubleshooting auth and API calls
+
+- Run `ddog doctor --output json` first. It reports whether credentials are present without printing secret values.
+- Confirm `DATADOG_API_KEY`, `DATADOG_APP_KEY`, and `DATADOG_SITE` match the Datadog account/site you are querying.
+- Use `--no-env-file` if you want to ignore a local `.env` file and rely only on exported environment variables.
+- If a live command fails, retry with a narrow query and include the command, site, and non-secret error text in bug reports.
 
 ## Documentation
 
