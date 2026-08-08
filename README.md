@@ -1,62 +1,79 @@
-# ddog
+# datadog-axi
 
-`ddog` is a single-binary Datadog CLI for AI agents, automation, and terminal-first engineers.
+`datadog-axi` is the canonical single-binary Datadog CLI for Datadog investigations by AI agents, automation, and terminal-first engineers. `ddog` is retained only as an explicit deprecated compatibility build path.
 
 It is designed for the cases where you want Datadog access from a shell, script, CI job, or coding agent runtime where MCP is unavailable, inconvenient, or unnecessary.
 
-`ddog` uses the official Datadog Go SDK, authenticates with environment variables, stays self-discoverable through `--help`, and supports stable JSON output for automation.
+`datadog-axi` calls documented official Datadog APIs through the official Datadog
+Go SDK, follows the [AXI CLI guidance](https://axi.md/), stays self-discoverable
+through `--help`, and emits deterministic TOON-like output by default. Use
+`--json` for stable normalized JSON; exports preserve full SDK specifications. The
+default renderer is documented as TOON-like rather than a full TOON-conformance
+claim; see [the principle mapping](docs/axi-compliance.md).
+
+The design studied Datadog's [Pup](https://github.com/DataDog/pup) for useful
+investigation and agent-ergonomics ideas, but does not clone Pup's architecture,
+command count, implementation, documentation, or agent system. `datadog-axi` is a
+focused investigation CLI with a smaller, deliberately bounded write surface.
 
 ## Why this exists
 
 - **MCP fallback for agents**: useful when an agent can run terminal commands but cannot use a Datadog MCP server
 - **Fast terminal workflows**: inspect monitors, dashboards, hosts, metrics, and logs without leaving the shell
-- **Automation-friendly output**: use concise text for humans or `--output json` for scripts and agents
+- **Automation-friendly output**: use compact TOON-like output by default or `--json` for scripts and agents
 - **Help-driven discovery**: the command tree is meant to be explored directly from the binary
 
-Current scope is intentionally **read-only**.
+The interface is shaped around concrete investigation costs: bounded previews and
+field projection reduce oversized payloads; explicit cursors, counts, and time
+ranges make pagination predictable; definitive empty states avoid re-running a
+successful query just to confirm “nothing”; related domains (spans, metrics,
+monitors, events, SLOs, downtimes, and service ownership) reduce round trips;
+export/validate/dry-run/fingerprint checks keep mutation interfaces narrow; and
+contextual next-command suggestions make the next safe step discoverable.
+
+Investigation commands are read-only by default. The only write surface is an
+explicit, fingerprint-gated update of an existing monitor or dashboard; no
+create, delete, mute, or arbitrary API writes are exposed.
 
 ## Install
 
-### Recommended: latest release installer
+### Release installer (recommended)
 
 ```bash
-curl -fsSL https://github.com/nazar256/datadog-cli/releases/latest/download/install.sh | sh
-```
-
-This installer selects the correct release archive for your platform and verifies its SHA256 checksum before installing.
-
-### Build from source
-
-```bash
-go build -o ddog ./cmd/ddog
-./ddog --help
+curl -fsSL https://github.com/nazar256/datadog-axi/releases/latest/download/install.sh | sh
 ```
 
 ### Go install
 
 ```bash
-go install github.com/nazar256/datadog-cli/cmd/ddog@latest
+go install github.com/nazar256/datadog-axi/cmd/datadog-axi@latest
 ```
 
-`go install` is useful for source-based workflows, but release binaries are the primary install path and include embedded version metadata.
+### Build from source
+
+```bash
+mkdir -p .tmp/bin
+go build -o .tmp/bin/datadog-axi ./cmd/datadog-axi
+./.tmp/bin/datadog-axi
+```
 
 More install details: [docs/install.md](docs/install.md)
 
 ## Authentication
 
-`ddog` reads Datadog credentials from:
+`datadog-axi` reads Datadog credentials from:
 
-- `DATADOG_API_KEY`
-- `DATADOG_APP_KEY`
-- optional `DATADOG_SITE`
+- `DD_API_KEY` (legacy `DATADOG_API_KEY`)
+- `DD_APP_KEY` (legacy `DATADOG_APP_KEY`)
+- optional `DD_SITE` (legacy `DATADOG_SITE`)
 
-You can also point to a local env file with `--env-file`. By default, `ddog` reads `.env` from the current working directory only.
+You can also point to a local env file with `--env-file`; this is isolated from layered discovery. Without it, user config, the repository-root, and cwd `.env` files are considered. `--no-env-file` disables all file discovery.
 
 ```bash
-export DATADOG_API_KEY=YOUR_DATADOG_API_KEY
-export DATADOG_APP_KEY=YOUR_DATADOG_APP_KEY
-export DATADOG_SITE=datadoghq.com
-ddog doctor
+export DD_API_KEY=YOUR_DATADOG_API_KEY
+export DD_APP_KEY=YOUR_DATADOG_APP_KEY
+export DD_SITE=datadoghq.com
+datadog-axi doctor --json
 ```
 
 Secrets are never accepted as CLI flags.
@@ -66,85 +83,101 @@ Secrets are never accepted as CLI flags.
 Start with built-in help and docs:
 
 ```bash
-ddog --help
-ddog docs summary
-ddog docs commands --output json
-ddog doctor --help
-ddog log search --help
-ddog completion --help
+datadog-axi --help
+datadog-axi docs summary
+datadog-axi docs commands --json
+datadog-axi doctor --help
+datadog-axi log search --help
+datadog-axi completion --help
 ```
 
 ## Real examples
 
 ```bash
 # verify auth, site, and output mode
-ddog doctor --output json
+datadog-axi doctor --json
 
 # inspect monitor coverage for a service
-ddog monitor list --name api --limit 20 --output json
+datadog-axi monitor list --name api --limit 20 --json
 
 # fetch dashboards in concise terminal output
-ddog dashboard list --count 20
+datadog-axi dashboard list --count 20
 
 # query a recent metric window; use JSON when parsing
-ddog metric query --query 'avg:system.load.1{*}' --last 1h --output json
+datadog-axi metric query --query 'avg:system.load.1{*}' --last 1h --json
+datadog-axi metric search --query 'system.cpu' --limit 20 --json
+datadog-axi metric active --last 1h --limit 50 --json
 
 # search recent logs for a narrow incident query
-ddog log search --query 'service:web status:error' --last 15m --limit 20 --output json
+datadog-axi log search --query 'service:web status:error' --last 15m --limit 20 --json
 ```
 
 ## Use with AI agents
 
-`ddog` works well for agents that need Datadog access through ordinary shell commands.
+`datadog-axi` works well for agents that need Datadog access through ordinary shell commands.
 
 Recommended agent flow:
 
-1. Run `ddog --help` for the command tree, and `ddog docs commands --output json` for high-level command taxonomy guidance.
-2. Run `ddog doctor --output json` before live Datadog calls. `ddog config doctor` remains available and resolves to the same configuration check.
-3. Prefer `--output json` whenever the result will be parsed.
+1. Run `datadog-axi` for the bounded home view, then `datadog-axi --help` or `datadog-axi docs commands --json` for taxonomy guidance.
+2. Run `datadog-axi doctor --json` before live Datadog calls. `datadog-axi config doctor` remains available for explicit command-tree discovery.
+3. Prefer `--json` whenever the result will be parsed.
 4. Keep queries narrow and explicit, especially for logs and metrics.
-5. For `metric query`, parse the JSON `series` summaries such as `point_count`, `last_point_ts`, and `last_value` instead of assuming raw pointlists or text tables.
+5. For `metric query`, parse the JSON `series` summaries and complete `points` arrays instead of assuming text tables.
 6. For `log search`, start with a focused Datadog query and a short `--last` window, then widen only if needed.
 
 Examples:
 
 ```bash
-ddog version --output json
-ddog doctor --output json
-ddog monitor list --limit 10 --output json
-ddog metric query --query 'avg:system.cpu.user{env:prod}' --last 1h --output json
-ddog log search --query 'service:web status:error' --last 15m --limit 20 --output json
+datadog-axi --version --json
+datadog-axi doctor --json
+datadog-axi monitor list --limit 10 --json
+datadog-axi metric query --query 'avg:system.cpu.user{env:prod}' --last 1h --json
+datadog-axi log search --query 'service:web status:error' --last 15m --limit 20 --json
 ```
 
 More: [docs/for-ai-agents.md](docs/for-ai-agents.md)
 
+Bounded, command-by-command investigation recipes are in
+[docs/investigation-guides.md](docs/investigation-guides.md).
+
 ## Output modes
 
-- default: concise terminal text
-- `--output json`: stable machine-readable output
+- default: deterministic TOON-like AXI output
+- `--json`: stable normalized machine-readable output (`--output json` remains a compatibility spelling)
+- `--output text`: legacy human table output
+- `--fields id,name`: project structured output to selected top-level fields
+- `--full`: disable table previews and retain complete metric points where applicable
 
 Useful JSON entry points:
 
 ```bash
-ddog version --output json
-ddog docs commands --output json
-ddog doctor --output json
-ddog monitor list --output json
-ddog metric query --query 'avg:system.load.1{*}' --last 1h --output json
+datadog-axi --version --json
+datadog-axi docs commands --json
+datadog-axi doctor --json
+datadog-axi monitor list --json
+datadog-axi metric query --query 'avg:system.load.1{*}' --last 1h --json
 ```
 
-## Supported v1 command areas
+## Supported command areas
 
 - `doctor`
 - `config doctor`
 - `completion`
 - `docs`
 - `version`
-- `monitor list|get`
-- `dashboard list|get`
+- `monitor list|search|get`
+- `dashboard list|get` (with page-local `--filter`)
 - `host list|get`
 - `metric query`
-- `log search`
+- `metric search`
+- `metric active`
+- `metric metadata`
+- `log search|aggregate`
+- `event list|get`
+- `slo list|search|get` (optional bounded history)
+- `downtime list|get`
+- `monitor export|validate|update` and `dashboard export|validate|update` preserve full SDK specifications and guard existing-resource edits.
+- `span list|aggregate|services|resources|operations`, `audit list`, and `service list|get` use official Datadog SDK adapters with bounded ranges, pagination, and normalized fields.
 
 ## Releases
 
@@ -159,12 +192,12 @@ Linux is the main release target today.
 
 Download binaries and checksums from:
 
-- <https://github.com/nazar256/datadog-cli/releases>
+- <https://github.com/nazar256/datadog-axi/releases>
 
 ## Troubleshooting auth and API calls
 
-- Run `ddog doctor --output json` first. It reports whether credentials are present without printing secret values.
-- Confirm `DATADOG_API_KEY`, `DATADOG_APP_KEY`, and `DATADOG_SITE` match the Datadog account/site you are querying.
+- Run `datadog-axi doctor --json` first. It reports whether credentials are present without printing secret values.
+- Confirm `DD_API_KEY`, `DD_APP_KEY`, and `DD_SITE` (or legacy `DATADOG_*` aliases) match the Datadog account/site you are querying.
 - Use `--no-env-file` if you want to ignore a local `.env` file and rely only on exported environment variables.
 - If a live command fails, retry with a narrow query and include the command, site, and non-secret error text in bug reports.
 
@@ -173,13 +206,16 @@ Download binaries and checksums from:
 - [docs/install.md](docs/install.md)
 - [docs/usage.md](docs/usage.md)
 - [docs/for-ai-agents.md](docs/for-ai-agents.md)
+- [docs/investigation-guides.md](docs/investigation-guides.md)
+- [docs/axi-compliance.md](docs/axi-compliance.md)
+- [docs/documentation-inventory.md](docs/documentation-inventory.md)
 - [docs/publish-checklist.md](docs/publish-checklist.md)
 
 ## Development
 
 ```bash
 go test ./...
-go build ./cmd/ddog
+go build ./cmd/datadog-axi
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for lightweight contribution guidance.

@@ -27,25 +27,25 @@ jobs:
         run: go test ./...
 
       - name: Build CLI
-        run: go build ./cmd/ddog
+        run: go build ./cmd/datadog-axi
 
       - name: Validate help and built-in docs
         run: |
-          go run ./cmd/ddog --help >/dev/null
-          go run ./cmd/ddog docs commands --output json >/dev/null
+          go run ./cmd/datadog-axi --help >/dev/null
+          go run ./cmd/datadog-axi docs commands --json >/dev/null
 
       - name: Smoke test release archive shape
         run: |
           set -euo pipefail
           tmpdir="$(mktemp -d)"
           trap 'rm -rf "${tmpdir}"' EXIT
-          archive="datadog-cli_test_linux_amd64.tar.gz"
+          archive="datadog-axi_test_linux_amd64.tar.gz"
 
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -trimpath \
-            -o "${tmpdir}/ddog" \
-            ./cmd/ddog
-          tar -C "${tmpdir}" -czf "${tmpdir}/${archive}" ddog
-          tar -tzf "${tmpdir}/${archive}" | grep -Fx ddog >/dev/null
+            -o "${tmpdir}/datadog-axi" \
+            ./cmd/datadog-axi
+          tar -C "${tmpdir}" -czf "${tmpdir}/${archive}" datadog-axi
+          tar -tzf "${tmpdir}/${archive}" | grep -Fx datadog-axi >/dev/null
           sha256sum "${tmpdir}/${archive}" > "${tmpdir}/checksums.txt"
           grep -F "${archive}" "${tmpdir}/checksums.txt" >/dev/null

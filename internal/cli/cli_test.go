@@ -2,8 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/nazar256/datadog-axi/internal/runtime"
 )
 
 func TestRootCmdHelp(t *testing.T) {
@@ -30,7 +33,7 @@ func TestRootCmdHelp(t *testing.T) {
 	if !strings.Contains(output, "Utility Commands:") {
 		t.Errorf("expected help to contain 'Utility Commands:', got:\n%s", output)
 	}
-	if !strings.Contains(output, "ddog is a Datadog CLI for humans, coding agents, and automation.") {
+	if !strings.Contains(output, "datadog-axi is a Datadog CLI for humans, coding agents, and automation.") {
 		t.Errorf("expected help to contain updated product description")
 	}
 	if !strings.Contains(output, "version") {
@@ -67,6 +70,45 @@ func TestRootCmdHelp(t *testing.T) {
 	}
 }
 
+func TestHomeViewUsesAXIIdentityKeys(t *testing.T) {
+	cmd := NewRootCmd(BuildInfo{Product: "datadog-axi"})
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"--no-env-file", "--output", "json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected home-view error: %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, `"bin":`) || !strings.Contains(output, `"description":`) || !strings.Contains(output, `"auth":`) || !strings.Contains(output, `"api_key":false`) || !strings.Contains(output, `"app_key":false`) {
+		t.Fatalf("home view lacks AXI identity/readiness keys: %s", output)
+	}
+}
+
+func TestRedactStructuredOutputRemovesSecretKeysAndConfiguredValues(t *testing.T) {
+	view := redactStructuredOutput(map[string]any{"raw": map[string]any{"api_key": "secret", "message": "token=secret"}}, runtime.Config{APIKey: "secret"})
+	data, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "secret") || !strings.Contains(string(data), "[REDACTED]") {
+		t.Fatalf("structured output leaked secret: %s", data)
+	}
+}
+
+func TestGeneratedCommandDocsFollowRegisteredLeaves(t *testing.T) {
+	docs := generatedCommandDocs(NewRootCmd(BuildInfo{Product: "datadog-axi"}))
+	if len(docs) < 20 {
+		t.Fatalf("generated command docs unexpectedly small: %d", len(docs))
+	}
+	seen := make(map[string]bool, len(docs))
+	for _, doc := range docs {
+		if doc.Path == "" || seen[doc.Path] {
+			t.Fatalf("invalid or duplicate generated command path: %#v", doc)
+		}
+		seen[doc.Path] = true
+	}
+}
+
 func TestVersionCmd(t *testing.T) {
 	cmd := NewRootCmd(BuildInfo{
 		Version: "1.0.0",
@@ -76,7 +118,7 @@ func TestVersionCmd(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
-	cmd.SetArgs([]string{"version"})
+	cmd.SetArgs([]string{"version", "--output", "text"})
 
 	err := cmd.Execute()
 	if err != nil {
@@ -84,7 +126,7 @@ func TestVersionCmd(t *testing.T) {
 	}
 
 	output := buf.String()
-	expected := "ddog version 1.0.0 (commit: abcdef, date: 2023-10-27)\n"
+	expected := "datadog-axi version 1.0.0 (commit: abcdef, date: 2023-10-27)\n"
 	if output != expected {
 		t.Errorf("expected %q, got %q", expected, output)
 	}
@@ -119,7 +161,7 @@ func TestConfigDoctorCmd(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
-	cmd.SetArgs([]string{"config", "doctor", "--no-env-file"})
+	cmd.SetArgs([]string{"config", "doctor", "--no-env-file", "--output", "text"})
 
 	err := cmd.Execute()
 	if err != nil {
@@ -141,6 +183,27 @@ func TestConfigDoctorCmd(t *testing.T) {
 	}
 	if strings.Contains(output, "super-secret-api") || strings.Contains(output, "super-secret-app") {
 		t.Errorf("output should not leak secret keys")
+	}
+}
+
+func TestConfigDoctorJSONPreservesPresenceAndSourceMetadata(t *testing.T) {
+	t.Setenv("DD_API_KEY", "super-secret-api")
+	t.Setenv("DD_APP_KEY", "super-secret-app")
+	cmd := NewRootCmd(BuildInfo{})
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"config", "doctor", "--no-env-file", "--output", "json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	output := buf.String()
+	for _, expected := range []string{`"api_key":"present"`, `"app_key":"present"`, `"api_key":"process:DD_API_KEY"`, `"app_key":"process:DD_APP_KEY"`} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("doctor JSON lost safe metadata %q: %s", expected, output)
+		}
+	}
+	if strings.Contains(output, "super-secret") {
+		t.Fatalf("doctor JSON leaked credentials: %s", output)
 	}
 }
 
@@ -200,5 +263,8 @@ func TestDocsCommandsJSONMentionsDoctorAndCompletion(t *testing.T) {
 	}
 	if !strings.Contains(output, "completion") {
 		t.Fatalf("expected docs commands output to mention completion, got: %s", output)
+	}
+	if !strings.Contains(output, "pagination") && !strings.Contains(output, "cursor") {
+		t.Fatalf("expected docs commands output to include machine-readable command metadata, got: %s", output)
 	}
 }

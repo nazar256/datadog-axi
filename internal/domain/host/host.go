@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadogV1"
-	cliruntime "github.com/nazar256/datadog-cli/internal/runtime"
+	cliruntime "github.com/nazar256/datadog-axi/internal/runtime"
 )
 
 type Service interface {
@@ -54,6 +54,13 @@ func (LiveService) List(ctx context.Context, cfg cliruntime.Config, params ListP
 	if err != nil {
 		return ListResult{}, err
 	}
+	return listWithClient(client, params)
+}
+
+func listWithClient(client *cliruntime.Client, params ListParams) (ListResult, error) {
+	if client == nil {
+		return ListResult{}, fmt.Errorf("host client must not be nil")
+	}
 	api := datadogV1.NewHostsApi(client.API)
 	opt := datadogV1.NewListHostsOptionalParameters().WithIncludeHostsMetadata(true).WithIncludeMutedHostsData(true)
 	if params.Filter != "" {
@@ -67,7 +74,7 @@ func (LiveService) List(ctx context.Context, cfg cliruntime.Config, params ListP
 	}
 	resp, _, err := api.ListHosts(client.Ctx, *opt)
 	if err != nil {
-		return ListResult{}, cliruntime.WrapAPIError(err)
+		return ListResult{}, cliruntime.WrapAPIError(err, client.Config)
 	}
 	items := resp.GetHostList()
 	views := make([]Summary, 0, len(items))
@@ -82,13 +89,21 @@ func (LiveService) Get(ctx context.Context, cfg cliruntime.Config, name string) 
 	if err != nil {
 		return Detail{}, err
 	}
+	return getWithClient(client, name)
+}
+
+func getWithClient(client *cliruntime.Client, name string) (Detail, error) {
+	if client == nil {
+		return Detail{}, fmt.Errorf("host client must not be nil")
+	}
 	api := datadogV1.NewHostsApi(client.API)
 	const pageSize int64 = 1000
+	const maxPages = 100
 	start := int64(0)
-	for {
+	for page := 0; page < maxPages; page++ {
 		resp, _, err := api.ListHosts(client.Ctx, *datadogV1.NewListHostsOptionalParameters().WithFilter(name).WithIncludeHostsMetadata(true).WithIncludeMutedHostsData(true).WithCount(pageSize).WithStart(start))
 		if err != nil {
-			return Detail{}, cliruntime.WrapAPIError(err)
+			return Detail{}, cliruntime.WrapAPIError(err, client.Config)
 		}
 		items := resp.GetHostList()
 		for _, item := range items {
@@ -101,7 +116,7 @@ func (LiveService) Get(ctx context.Context, cfg cliruntime.Config, name string) 
 		}
 		start += pageSize
 	}
-	return Detail{}, fmt.Errorf("host %q not found", name)
+	return Detail{}, fmt.Errorf("host %q not found within bounded inventory search (%d pages)", name, maxPages)
 }
 
 func matchesHost(item datadogV1.Host, name string) bool {

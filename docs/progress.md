@@ -1,5 +1,8 @@
 # Progress Log
 
+> Historical implementation log. Current behavior and deferred surfaces are
+> tracked in [docs/axi-compliance.md](axi-compliance.md).
+
 ## 2026-03-21
 
 - Initialized Datadog CLI v1 plan for a near-empty repository.

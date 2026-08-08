@@ -3,10 +3,11 @@ package runtime
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/nazar256/datadog-cli/internal/timeutil"
+	"github.com/nazar256/datadog-axi/internal/timeutil"
 )
 
 func TestResolveConfig(t *testing.T) {
@@ -77,6 +78,7 @@ func TestResolveConfig(t *testing.T) {
 				NoEnvFile: true,
 			},
 			wantSite: DefaultSite,
+			wantErr:  true,
 		},
 		{
 			name: "invalid site",
@@ -131,6 +133,76 @@ func TestResolveConfig(t *testing.T) {
 	}
 }
 
+func TestResolveConfigStandardAliases(t *testing.T) {
+	t.Setenv("DD_API_KEY", "alias-api")
+	t.Setenv("DD_APP_KEY", "alias-app")
+	t.Setenv("DD_SITE", "us3")
+	cfg, err := ResolveConfig(FlagValues{NoEnvFile: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.APIKey != "alias-api" || cfg.AppKey != "alias-app" || cfg.Site != "us3.datadoghq.com" {
+		t.Fatalf("unexpected alias config: %+v", cfg)
+	}
+	if cfg.Sources["api_key"] != "process:DD_API_KEY" || cfg.Sources["site"] != "process:DD_SITE" {
+		t.Fatalf("unexpected config sources: %+v", cfg.Sources)
+	}
+}
+
+func TestResolveConfigPrefersStandardAliasesOverLegacy(t *testing.T) {
+	t.Setenv("DD_API_KEY", "preferred-api")
+	t.Setenv("DATADOG_API_KEY", "legacy-api")
+	t.Setenv("DD_APP_KEY", "preferred-app")
+	t.Setenv("DATADOG_APP_KEY", "legacy-app")
+	t.Setenv("DD_SITE", "us5")
+	t.Setenv("DATADOG_SITE", "eu")
+	cfg, err := ResolveConfig(FlagValues{NoEnvFile: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.APIKey != "preferred-api" || cfg.AppKey != "preferred-app" || cfg.Site != "us5.datadoghq.com" {
+		t.Fatalf("standard aliases did not win: %+v", cfg)
+	}
+}
+
+func TestResolveConfigLayeredEnvUsesMostSpecificFile(t *testing.T) {
+	root := t.TempDir()
+	child := filepath.Join(root, "repo", "nested")
+	if err := os.MkdirAll(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("DD_SITE=eu\nDD_API_KEY=lower-api\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(child, ".env"), []byte("DATADOG_SITE=us5\nDATADOG_API_KEY=higher-api\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(child)
+	for _, key := range []string{"DD_SITE", "DATADOG_SITE"} {
+		old, present := os.LookupEnv(key)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if present {
+				_ = os.Setenv(key, old)
+			} else {
+				_ = os.Unsetenv(key)
+			}
+		})
+	}
+	cfg, err := ResolveConfig(FlagValues{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Site != "us5.datadoghq.com" || cfg.APIKey != "higher-api" {
+		t.Fatalf("most-specific env file did not win: site=%s files=%v", cfg.Site, cfg.EnvFiles)
+	}
+}
+
 func TestNormalizeSite(t *testing.T) {
 	tests := []struct {
 		raw     string
@@ -175,5 +247,47 @@ func TestResolveConfigRejectsNegativeTimeout(t *testing.T) {
 	_, err := ResolveConfig(FlagValues{NoEnvFile: true, Timeout: -1 * time.Second})
 	if err == nil {
 		t.Fatal("expected negative timeout to fail")
+	}
+}
+
+func TestResolveConfigRejectsExplicitSymlinkEnvFile(t *testing.T) {
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("resolve test working directory: %v", err)
+	}
+	root := findProjectTempRoot(workingDirectory)
+	if info, err := os.Stat(root); err == nil && !info.IsDir() {
+		t.Fatalf("temporary test root is not a directory: %s", root)
+	}
+	if err := os.MkdirAll(root, 0755); err != nil {
+		t.Fatalf("create temporary test root: %v", err)
+	}
+	directory, err := os.MkdirTemp(root, "case-")
+	if err != nil {
+		t.Fatalf("create temporary test directory: %v", err)
+	}
+	realPath := filepath.Join(directory, "real.env")
+	linkPath := filepath.Join(directory, "linked.env")
+	if err := os.WriteFile(realPath, []byte("DD_SITE=eu\n"), 0600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("create env-file symlink: %v", err)
+	}
+	_, err = ResolveConfig(FlagValues{EnvFile: linkPath})
+	if err == nil || !strings.Contains(err.Error(), "env file must not be a symlink") {
+		t.Fatalf("expected explicit env-file symlink rejection, got %v", err)
+	}
+}
+
+func findProjectTempRoot(start string) string {
+	for directory := start; ; directory = filepath.Dir(directory) {
+		if _, err := os.Stat(filepath.Join(directory, "go.mod")); err == nil {
+			return filepath.Join(directory, ".tmp", "env-safety-tests")
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return filepath.Join(start, ".tmp", "env-safety-tests")
+		}
 	}
 }

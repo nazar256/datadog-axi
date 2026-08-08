@@ -1,94 +1,54 @@
 # For AI agents
 
-`ddog` is useful when an agent needs Datadog access from a terminal, script, or sandbox where MCP is unavailable or impractical.
+`datadog-axi` is self-describing and does not require an Agent Skill, session hook, plugin, or platform-specific integration.
 
-## Authenticate
+The command's built-in help and home view are the primary discovery surface. The
+optional repository guide at [investigation-guides.md](investigation-guides.md)
+adds bounded procedures without becoming a runtime dependency or duplicating every
+flag.
 
-Use environment variables or an explicit `.env` file:
-
-```bash
-export DATADOG_API_KEY=...
-export DATADOG_APP_KEY=...
-export DATADOG_SITE=datadoghq.com
-```
-
-Or:
+Start with the bounded home view and configuration check:
 
 ```bash
-ddog --env-file .env doctor
+datadog-axi
+datadog-axi doctor --json
 ```
 
-## Discover the command tree
+Use `--json` whenever output will be parsed. Default TOON-like output is compact and deterministic; errors are structured on stdout and use exit code 2 for usage errors and 1 for operational errors.
 
-Start with built-in help and docs:
+## Narrow investigation loop
 
 ```bash
-ddog --help
-ddog docs summary
-ddog docs commands --output json
-ddog doctor --help
-ddog log search --help
-ddog completion --help
+datadog-axi log search --query 'service:web status:error' --last 15m --limit 20 --json
+datadog-axi metric query --query 'avg:system.cpu.user{env:prod}' --last 1h --json
+datadog-axi monitor list --name api --limit 20 --json
 ```
 
-Use `--help` for the actual command tree. `ddog docs commands --output json` is a compact machine-readable summary of the command taxonomy, not a full command listing.
+Keep time windows and limits explicit. Treat empty, partial, unavailable, and permission-limited responses as distinct states. Follow each command's concrete help suggestions rather than guessing a broad command.
 
-## Prefer machine-readable output when parsing results
+Use `metric metadata` before treating a metric name as monitor-ready. Use
+`monitor export` or `dashboard export` before reviewing an existing resource
+specification.
+
+## Safe edits
+
+Export or prepare a complete existing monitor/dashboard specification, validate it
+with `validate --file <path>`,
+then run a targeted update with the resource ID and specification file for a live
+semantic dry-run. Apply only after
+reviewing the returned live fingerprint and diff, with `--apply --fingerprint`.
+The command re-fetches after writing and refuses stale fingerprints. Never pass
+credentials on the command line. The CLI never creates or deletes resources and
+does not prompt.
+
+## More discovery
 
 ```bash
-ddog version --output json
-ddog doctor --output json
-ddog monitor list --limit 10 --output json
-ddog log search --query 'service:web status:error' --last 15m --output json
+datadog-axi --help
+datadog-axi docs commands --json
+datadog-axi monitor list --help
+datadog-axi log search --help
 ```
 
-## Good agent workflows
-
-Check auth and site before live calls:
-
-```bash
-ddog doctor --output json
-```
-
-`ddog config doctor` is still supported and returns the same data, but `ddog doctor` is the shortest discoverable path.
-
-Discover monitors related to a service:
-
-```bash
-ddog monitor list --name api --limit 20 --output json
-```
-
-Pull recent logs for a narrow incident query:
-
-```bash
-ddog log search --query 'service:web status:error' --last 15m --limit 20 --output json
-```
-
-When exploring logs, start with a focused query and short `--last` window, then add terms such as `env:prod`, `host:web-01`, or `@http.status_code:[500 TO 599]` before widening the range.
-
-Inspect a metric window:
-
-```bash
-ddog metric query --query 'avg:system.cpu.user{env:prod}' --last 1h --output json
-```
-
-For `metric query`, parse the JSON `series` array. Each series is summarized with fields such as:
-
-- `point_count`: number of non-empty points returned for the series
-- `last_point_ts`: timestamp of the last non-empty point
-- `last_value`: numeric value of that last point
-
-Do not assume raw pointlists are present in CLI output; if you need stable parsing, always request `--output json`.
-
-## Completion
-
-The CLI exposes the built-in Cobra completion command:
-
-```bash
-ddog completion bash
-ddog completion zsh
-ddog completion fish
-ddog completion powershell
-```
-
-Current scope is intentionally read-oriented: monitors, dashboards, hosts, metrics, and logs.
+For the complete logs-to-traces, metric metadata, ownership, SLO/downtime, event,
+and guarded update recipes, see [investigation-guides.md](investigation-guides.md).

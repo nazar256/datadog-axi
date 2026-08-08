@@ -3,20 +3,20 @@
 set -eu
 
 OWNER="nazar256"
-REPO="datadog-cli"
-PROJECT_NAME="datadog-cli"
-BINARY_NAME="ddog"
-BASE_URL_OVERRIDE="${DDOG_INSTALL_BASE_URL:-}"
+REPO="datadog-axi"
+PROJECT_NAME="datadog-axi"
+BINARY_NAME="datadog-axi"
+BASE_URL_OVERRIDE="${DATADOG_AXI_INSTALL_BASE_URL:-}"
 
 usage() {
   cat <<'EOF'
-Install datadog-cli from the latest GitHub release.
+Install datadog-axi from the latest GitHub release.
 
 Usage:
   install.sh [--version <tag>] [--install-dir <dir>]
 
 Options:
-  --version <tag>      Install a specific release tag (for example v1.0.0)
+  --version <tag>      Install a specific compatible release tag (for example vX.Y.Z)
   --install-dir <dir>  Install into a specific directory
   -h, --help           Show this help message
 EOF

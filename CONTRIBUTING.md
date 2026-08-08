@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in improving `ddog`.
+Thanks for your interest in improving `datadog-axi`.
 
 ## What this project optimizes for
 
@@ -13,17 +13,23 @@ Thanks for your interest in improving `ddog`.
 
 ```bash
 go test ./...
-go build ./cmd/ddog
-go run ./cmd/ddog --help
+go build ./cmd/datadog-axi
+go run ./cmd/datadog-axi --help
 ```
 
 If you are changing docs or examples, make sure they match real CLI behavior.
+Keep [docs/documentation-inventory.md](docs/documentation-inventory.md) aligned
+when adding, replacing, or deferring a public documentation surface. Built-in
+`datadog-axi docs` and `--help` are executable guidance; do not create a second
+flag reference that can drift from the command tree.
 
 ## Configuration and secrets
 
-- Use `DATADOG_API_KEY` and `DATADOG_APP_KEY` from your environment or a local `.env` file.
+- Use `DD_API_KEY` and `DD_APP_KEY` from your environment or a local `.env` file; legacy `DATADOG_*` aliases remain supported.
 - Never commit real Datadog credentials.
-- Prefer `ddog doctor` when checking auth-related behavior; `ddog config doctor` remains available when you want the explicit subcommand path.
+- Prefer `datadog-axi doctor` when checking auth-related behavior; `datadog-axi config doctor` remains available when you want the explicit subcommand path.
+- Use the preferred `DD_*` variable spelling in new examples. Keep
+  `DATADOG_*` only when documenting the supported compatibility aliases.
 
 ## Pull requests
 
@@ -36,7 +42,7 @@ If you are changing docs or examples, make sure they match real CLI behavior.
 If you report a bug, include:
 
 - the command you ran
-- whether you used `--output json`
+- whether you used `--json`
 - the Datadog site you targeted
 - the relevant error text
 

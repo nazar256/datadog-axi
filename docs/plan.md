@@ -1,5 +1,17 @@
 # Datadog CLI v1 Plan
 
+> Historical baseline plan. The shipped product is now named `datadog-axi`;
+> see [docs/axi-compliance.md](axi-compliance.md) for the current contract.
+> Historical design note. The original read-only scope below predates the current
+> guarded monitor/dashboard update flow and the added spans, audit, service,
+> event, downtime, and SLO domains. For current behavior use
+> [docs/axi-compliance.md](axi-compliance.md), [docs/usage.md](usage.md), and
+> [docs/documentation-inventory.md](documentation-inventory.md).
+>
+> The `DATADOG_*` names and “write/mutate workflows” wording below describe the
+> pre-AXI baseline only. Current examples use `DD_*`; current writes are limited
+> to fingerprint-gated updates of existing monitors and dashboards.
+
 ## Objective
 
 Build a production-quality Go CLI for Datadog in this repository using Cobra and the official Datadog Go SDK, optimized for both humans and AI agents.

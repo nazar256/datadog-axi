@@ -1,6 +1,10 @@
 # Repository publishability plan
 
-Goal: make `datadog-cli` easier to discover, trust, install, and understand as a public open-source repository.
+This planning note predates the current `datadog-axi` implementation; use the
+README and [AXI compliance contract](axi-compliance.md) as the current source of
+truth for command and mutation claims.
+
+Goal: make the repository easier to discover, trust, install, and understand as a public open-source repository.
 
 ## Focus areas
 
@@ -17,7 +21,8 @@ Goal: make `datadog-cli` easier to discover, trust, install, and understand as a
    - contributing guidance
    - security reporting guidance
    - CI workflow
-4. Keep all claims/examples aligned with the current read-only CLI behavior.
+4. Keep all claims/examples aligned with the current read-only-by-default CLI
+   behavior and its narrowly scoped fingerprint-gated updates.
 
 ## Non-goals
 

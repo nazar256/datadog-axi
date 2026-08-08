@@ -9,3 +9,4 @@ dist/
 coverage.out
 *.coverprofile
 .DS_Store
+/datadog-axi

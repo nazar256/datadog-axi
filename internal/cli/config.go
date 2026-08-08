@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/nazar256/datadog-cli/internal/output"
-	"github.com/nazar256/datadog-cli/internal/runtime"
+	"github.com/nazar256/datadog-axi/internal/output"
+	"github.com/nazar256/datadog-axi/internal/runtime"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +14,7 @@ func newConfigCmd(opts *GlobalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "config",
 		Short:   "Inspect CLI configuration",
-		Long:    "Inspect non-secret CLI configuration. Use 'ddog doctor' or 'ddog config doctor' to verify auth and resolved settings.",
+		Long:    "Inspect non-secret CLI configuration. Use 'datadog-axi doctor' or 'datadog-axi config doctor' to verify auth and resolved settings.",
 		GroupID: "utility",
 	}
 
@@ -27,9 +27,9 @@ func newDoctorCmd(opts *GlobalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "doctor",
 		Short:   "Check configuration and authentication status",
-		Long:    "Resolve configuration exactly as the CLI sees it and report non-secret settings plus whether authentication values are present. This is the top-level alias for 'ddog config doctor'.",
+		Long:    "Resolve configuration exactly as the CLI sees it and report non-secret settings plus whether authentication values are present. This is the top-level alias for 'datadog-axi config doctor'.",
 		Args:    cobra.NoArgs,
-		Example: "ddog doctor\n  ddog doctor --output json\n  ddog --site eu doctor",
+		Example: "datadog-axi doctor\n  datadog-axi doctor --json\n  datadog-axi --site eu doctor",
 		GroupID: "utility",
 		RunE:    runDoctor(opts),
 	}
@@ -43,8 +43,8 @@ func newConfigDoctorCmd(opts *GlobalOptions) *cobra.Command {
 		Args:  cobra.NoArgs,
 		Long: strings.TrimSpace(`Resolve configuration exactly as the CLI sees it and report non-secret settings plus whether authentication values are present.
 
-Prefer 'ddog doctor' when you want the shortest path. 'ddog config doctor' remains available for explicit command-tree discovery.`),
-		Example: "ddog config doctor\n  ddog doctor --output json\n  ddog --env-file .env config doctor",
+Prefer 'datadog-axi doctor' when you want the shortest path. 'datadog-axi config doctor' remains available for explicit command-tree discovery.`),
+		Example: "datadog-axi config doctor\n  datadog-axi doctor --json\n  datadog-axi --env-file .env config doctor",
 		RunE:    runDoctor(opts),
 	}
 	return cmd
@@ -58,16 +58,19 @@ func runDoctor(opts *GlobalOptions) func(*cobra.Command, []string) error {
 		}
 
 		doctor := configDoctorView{
-			Site:       cfg.Site,
-			Timeout:    cfg.Timeout.String(),
-			Output:     string(cfg.Output),
-			EnvFile:    emptyFallback(cfg.EnvFileUsed, "(none)"),
-			APIKey:     presence(cfg.APIKey),
-			AppKey:     presence(cfg.AppKey),
-			AuthStatus: doctorStatus(cfg),
+			Site:        cfg.Site,
+			Timeout:     cfg.Timeout.String(),
+			Output:      string(cfg.Output),
+			EnvFile:     emptyFallback(cfg.EnvFileUsed, "(none)"),
+			EnvFiles:    cfg.EnvFiles,
+			Diagnostics: cfg.Diagnostics,
+			Sources:     cfg.Sources,
+			APIKey:      presence(cfg.APIKey),
+			AppKey:      presence(cfg.AppKey),
+			AuthStatus:  doctorStatus(cfg),
 		}
 
-		return output.Write(cmd.OutOrStdout(), cfg.Output, doctor, func(w io.Writer) error {
+		return writeOutput(cmd, opts, cfg, doctor, func(w io.Writer) error {
 			_, err := fmt.Fprintln(w, "Configuration Doctor")
 			if err != nil {
 				return err
@@ -87,26 +90,71 @@ func runDoctor(opts *GlobalOptions) func(*cobra.Command, []string) error {
 			}); err != nil {
 				return err
 			}
-			_, err = fmt.Fprintln(w, "\nSecrets are never printed. Use DATADOG_API_KEY and DATADOG_APP_KEY via env or .env.")
+			if len(doctor.EnvFiles) > 0 {
+				if _, err := fmt.Fprintln(w, "Env Files\t"+strings.Join(doctor.EnvFiles, "; ")); err != nil {
+					return err
+				}
+			}
+			if len(doctor.Diagnostics) > 0 {
+				if _, err := fmt.Fprintln(w, "Diagnostics\t"+strings.Join(doctor.Diagnostics, "; ")); err != nil {
+					return err
+				}
+			}
+			if len(doctor.Sources) > 0 {
+				if _, err := fmt.Fprintln(w, "Sources\t"+formatSources(doctor.Sources)); err != nil {
+					return err
+				}
+			}
+			_, err = fmt.Fprintln(w, "\nSecrets are never printed. Use DD_API_KEY and DD_APP_KEY (legacy DATADOG_* aliases are supported).")
 			return err
 		})
 	}
 }
 
 type configDoctorView struct {
-	Site       string `json:"site"`
-	Timeout    string `json:"timeout"`
-	Output     string `json:"output"`
-	EnvFile    string `json:"env_file"`
-	APIKey     string `json:"api_key"`
-	AppKey     string `json:"app_key"`
-	AuthStatus string `json:"auth_status"`
+	Site        string            `json:"site"`
+	Timeout     string            `json:"timeout"`
+	Output      string            `json:"output"`
+	EnvFile     string            `json:"env_file"`
+	EnvFiles    []string          `json:"env_files,omitempty"`
+	Diagnostics []string          `json:"diagnostics,omitempty"`
+	Sources     map[string]string `json:"sources,omitempty"`
+	APIKey      string            `json:"api_key"`
+	AppKey      string            `json:"app_key"`
+	AuthStatus  string            `json:"auth_status"`
+}
+
+func formatSources(sources map[string]string) string {
+	keys := []string{"site", "api_key", "app_key"}
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if source := sources[key]; source != "" {
+			parts = append(parts, key+"="+source)
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 func runtimeConfigForOffline(opts *GlobalOptions) (runtime.Config, error) {
-	format, err := output.ParseFormat(opts.Output)
+	if opts.NoEnvFile && strings.TrimSpace(opts.EnvFile) != "" {
+		return runtime.Config{}, runtime.UsageErrorf("--env-file and --no-env-file cannot be used together")
+	}
+	if opts.Timeout < 0 {
+		return runtime.Config{}, runtime.UsageErrorf("timeout must be greater than or equal to 0")
+	}
+	formatName := opts.Output
+	if opts.JSON {
+		if strings.TrimSpace(formatName) != "" && !strings.EqualFold(formatName, string(output.JSON)) {
+			return runtime.Config{}, runtime.UsageErrorf("--json cannot be combined with --output %s", formatName)
+		}
+		formatName = string(output.JSON)
+	}
+	if formatName == "" {
+		formatName = opts.DefaultOutput
+	}
+	format, err := output.ParseFormat(formatName)
 	if err != nil {
-		return runtime.Config{}, err
+		return runtime.Config{}, runtime.WrapUsageError(err)
 	}
 	return runtime.Config{Output: format}, nil
 }

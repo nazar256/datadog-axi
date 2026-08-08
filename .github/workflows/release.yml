@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
-      PROJECT_NAME: datadog-cli
+      PROJECT_NAME: datadog-axi
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -63,10 +63,10 @@ jobs:
             CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build \
               -trimpath \
               -ldflags "${ldflags}" \
-              -o "${tmpdir}/ddog" \
-              ./cmd/ddog/main.go
+              -o "${tmpdir}/datadog-axi" \
+              ./cmd/datadog-axi/main.go
 
-            tar -C "${tmpdir}" -czf "dist/${name}.tar.gz" ddog
+            tar -C "${tmpdir}" -czf "dist/${name}.tar.gz" datadog-axi
             rm -rf "${tmpdir}"
           done
 
@@ -90,7 +90,7 @@ jobs:
             archive="${PROJECT_NAME}_${TAG}_${os}_${arch}.tar.gz"
 
             test -f "dist/${archive}"
-            tar -tzf "dist/${archive}" | grep -Fx ddog >/dev/null
+            tar -tzf "dist/${archive}" | grep -Fx datadog-axi >/dev/null
             grep -F "  ${archive}" "${checksums}" >/dev/null
           done
 
